@@ -9,33 +9,83 @@ const app = new Hono();
 
 
 type NewsApiArticle = {
-    source?: { id: string | null; name: string };
-    author?: string | null;
+    uuid?: string;
     title?: string;
     description?: string | null;
+    keywords?: string | null;
+    snippet?: string | null;
     url?: string;
-    urlToImage?: string | null;
-    publishedAt?: string;
-    content?: string | null;
+    image_url?: string | null;
+    language?: string;
+    published_at?: string;
+    source?: string | null;
+    categories?: string[] | null;
+    relevance_score?: number | null;
+    locale?: string | null;
+};
+
+type NewsApiMeta = {
+    found: number;
+    returned: number;
+    limit: number;
+    page: number;
 };
 
 type NewsApiResponse = {
-    status: string;
-    totalResults: number;
-    articles: NewsApiArticle[];
+    meta: NewsApiMeta;
+    data: NewsApiArticle[];
 };
 
-const NEWS_API_URL = "https://newsapi.org/v2/top-headlines?pageSize=100&country=us";
+const THE_NEWS_API_URL = "https://api.thenewsapi.com/v1/news/top?language=en&categories=business,tech";
+
+function mapTheNewsApiToNewsApiArticles(json: unknown): NewsApiArticle[] {
+    const root = json as { data?: unknown };
+    const data = root && typeof root === "object" ? (root as any).data : undefined;
+    let items: any[] = [];
+
+    if (Array.isArray(data)) {
+        items = data as any[];
+    } else if (data && typeof data === "object") {
+        for (const value of Object.values(data as Record<string, unknown>)) {
+            if (Array.isArray(value)) {
+                items.push(...(value as any[]));
+            }
+        }
+    }
+
+    return items.map((a: any): NewsApiArticle => ({
+        uuid: a?.uuid,
+        title: a?.title ?? undefined,
+        description: a?.description ?? null,
+        keywords: a?.keywords ?? null,
+        snippet: a?.snippet ?? null,
+        url: a?.url ?? undefined,
+        image_url: a?.image_url ?? null,
+        language: a?.language ?? undefined,
+        published_at: a?.published_at ?? undefined,
+        source: typeof a?.source === "string" ? a.source : (a?.source?.domain ?? null),
+        categories: Array.isArray(a?.categories) ? a.categories : null,
+        relevance_score: typeof a?.relevance_score === "number" ? a.relevance_score : null,
+        locale: a?.locale ?? null,
+    }));
+}
 
 async function fetchTopHeadlines(): Promise<NewsApiResponse> {
-    const newsApiKey = process.env.NEWSAPI_API_KEY || "";
-    const newsUrl = `${NEWS_API_URL}&apiKey=${encodeURIComponent(newsApiKey)}`;
+    const apiKey = process.env.THENEWSAPI_KEY || "";
+    const newsUrl = `${THE_NEWS_API_URL}&api_token=${encodeURIComponent(apiKey)}`;
     const res = await fetch(newsUrl);
     if (!res.ok) {
         throw new Error("Failed to fetch top headlines");
     }
-    const data = (await res.json()) as NewsApiResponse;
-    return data;
+    const raw = await res.json();
+    const articles = mapTheNewsApiToNewsApiArticles(raw);
+    const meta: NewsApiMeta = {
+        found: articles.length,
+        returned: articles.length,
+        limit: articles.length,
+        page: 1,
+    };
+    return { meta, data: articles };
 }
 
 function toolJson(data: unknown) {
@@ -53,12 +103,12 @@ const handler = createMcpPaidHandler(
     (server) => {
         server.tool(
             "news",
-            "Return unfiltered top US headlines from NewsAPI",
+            "Return unfiltered top US headlines from TheNewsAPI",
             {},
             async () => {
                 try {
                     const newsData = await fetchTopHeadlines();
-                    return toolJson({ articles: newsData.articles });
+                    return toolJson(newsData);
                 } catch (err) {
                     const message = err instanceof Error ? err.message : "Unknown error";
                     return toolJson({ error: message });
@@ -75,6 +125,7 @@ const handler = createMcpPaidHandler(
             async () => {
                 try {
                     const newsData = await fetchTopHeadlines();
+                    console.log("newsData in paid tool: ", newsData);
 
                     const openaiKey = process.env.OPENAI_API_KEY || "";
                     if (!openaiKey) {
@@ -92,7 +143,7 @@ const handler = createMcpPaidHandler(
                             {
                                 role: "user",
                                 content:
-                                    "Return strictly valid JSON array of articles from the provided input. Input JSON follows NewsAPI structure with an 'articles' array. Output must be a JSON array of article objects that were selected, preserving original fields.\n\nInput:" +
+                                    "Return strictly valid JSON array of articles from the provided input. Input JSON follows NewsAPI-like structure with an 'articles' array. Output must be a JSON array of article objects that were selected, preserving original fields.\n\nInput:" +
                                     "\n\n" +
                                     JSON.stringify(newsData),
                             },
@@ -102,6 +153,7 @@ const handler = createMcpPaidHandler(
                     });
 
                     const content = completion.choices?.[0]?.message?.content;
+                    console.log("Completion returned from openai: ", content);
 
                     let filteredArticles: NewsApiArticle[] = [];
                     try {
@@ -112,7 +164,8 @@ const handler = createMcpPaidHandler(
                         } else if (parsed && Array.isArray(parsed.articles)) {
                             filteredArticles = parsed.articles as NewsApiArticle[];
                         }
-                    } catch {
+                    } catch (err) {
+                        console.error(err);
                         filteredArticles = [];
                     }
 
