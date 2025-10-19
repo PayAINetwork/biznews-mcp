@@ -70,29 +70,32 @@ export const getClient = async () => {
 export const getClientResponse = async () => {
   const client = await getClient();
   // ✅ Correct overload: (name: string, args?: Record<string, unknown>)
-  const res = await client.callTool({
-    // name: "weather",
-    name: "news",
-    arguments: {
+  const res = await client.callTool(
+    {
+      name: "news",
+      arguments: {},
     },
-  });
+    undefined,
+    { timeout: 300000 }
+  );
   return res;
 };
 
 export const getBusinessNewsResponse = async () => {
   const client = await getClient();
-  const res = await client.callTool({
-    name: "business_news",
-    arguments: {
+  const res = await client.callTool(
+    {
+      name: "business_news",
+      arguments: {},
     },
-  });
+    undefined,
+    { timeout: 300000 }
+  );
   return res;
 };
 
 try {
   console.log("[main] Starting test...");
-  const response = await getClientResponse();
-  console.log("[main] News response:", response);
   const businessResponse = await getBusinessNewsResponse();
   console.log("[main] Business News response:", businessResponse);
 } catch (err) {
