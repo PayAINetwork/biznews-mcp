@@ -36,7 +36,7 @@ type NewsApiResponse = {
     data: NewsApiArticle[];
 };
 
-const THE_NEWS_API_URL = "https://api.thenewsapi.com/v1/news/top?language=en&categories=business,tech";
+const THE_NEWS_API_URL = "https://api.thenewsapi.com/v1/news/top?language=en";
 
 function mapTheNewsApiToNewsApiArticles(json: unknown): NewsApiArticle[] {
     const root = json as { data?: unknown };
