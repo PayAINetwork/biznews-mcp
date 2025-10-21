@@ -182,8 +182,8 @@ const handler = createMcpPaidHandler(
             url: process.env.FACILITATOR_URL as `${string}://${string}`
         },
         recipient: {
-            "evm": {address: process.env.EVM_RECIPIENT_ADDRESS as string, isTestnet: true},
-            "svm": {address: process.env.SVM_RECIPIENT_ADDRESS as string, isTestnet: true}
+            "evm": {address: process.env.EVM_RECIPIENT_ADDRESS as string},
+            "svm": {address: process.env.SVM_RECIPIENT_ADDRESS as string}
         }
     },
     {
